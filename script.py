@@ -22,8 +22,14 @@ def process_songs(input_dir, output_dir):
         while True:
             if path == stop_at:
                 break
+
+            rel_path = os.path.relpath(path, stop_at)
+            if os.path.sep not in rel_path:
+                break
+
             try:
                 os.rmdir(path)
+                print(f"Removed empty folder: {path}")
                 path = os.path.dirname(path)
             except OSError:
                 break
