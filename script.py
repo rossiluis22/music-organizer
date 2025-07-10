@@ -30,18 +30,24 @@ def process_songs(input_dir, output_dir):
 
     for root, _, files in os.walk(input_dir):
         for filename in files:
+            file_path = os.path.join(root, filename)
+
+            # Ignorar archivos modificados hace menos de 2 minutos
+            if time.time() - os.path.getmtime(file_path) < 120:
+                continue
+
             ext = filename.lower().split('.')[-1]
             if ext not in VALID_EXTENSIONS:
                 invalid_folder = os.path.join(output_dir, "Invalid Files")
                 os.makedirs(invalid_folder, exist_ok=True)
                 try:
-                    shutil.move(os.path.join(root, filename), os.path.join(invalid_folder, filename))
+                    shutil.move(file_path, os.path.join(invalid_folder, filename))
                     print(f"Moved invalid file to: {os.path.join(invalid_folder, filename)}")
                 except Exception as e:
                     errors.append(f"ERROR moving invalid file {filename}: {str(e)}")
                 continue
 
-            song_path = os.path.join(root, filename)
+            song_path = file_path
             print(f"Processing: {song_path}")
 
             try:
@@ -143,7 +149,6 @@ if __name__ == "__main__":
 
     observers = []
     for input_dir, output_dir in pairs:
-        # Procesa los ficheros existentes antes de empezar el watcher
         process_songs(input_dir, output_dir)
 
         event_handler = WatcherHandler(input_dir, output_dir)
@@ -161,4 +166,3 @@ if __name__ == "__main__":
             observer.stop()
         for observer in observers:
             observer.join()
-
