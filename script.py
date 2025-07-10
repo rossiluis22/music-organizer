@@ -19,8 +19,11 @@ def process_songs(input_dir, output_dir):
     errors = []
 
     def remove_empty_dirs(path, stop_at):
+        protected_folders = {"albums", "playlists", "songs", "youtube-dl", "zips"}
+
         while True:
-            if path == stop_at:
+            base = os.path.basename(path).lower()
+            if path == stop_at or base in protected_folders:
                 break
             try:
                 os.rmdir(path)
