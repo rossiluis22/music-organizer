@@ -148,6 +148,10 @@ if __name__ == "__main__":
         pairs.append((input_dir, output_dir))
 
     observers = []
+
+    print(f"⏳ Waiting 2 minutes cooldown before first process...")
+    time.sleep(120)
+
     for input_dir, output_dir in pairs:
         process_songs(input_dir, output_dir)
 
