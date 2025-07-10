@@ -23,10 +23,9 @@ def process_songs(input_dir, output_dir):
             if path == stop_at:
                 break
             try:
-                os.rmdir(path)  # Only removes if directory is empty
+                os.rmdir(path)
                 path = os.path.dirname(path)
             except OSError:
-                # Directory not empty or error, stop trying
                 break
 
     for root, _, files in os.walk(input_dir):
@@ -41,7 +40,6 @@ def process_songs(input_dir, output_dir):
                 except Exception as e:
                     errors.append(f"ERROR moving invalid file {filename}: {str(e)}")
                 continue
-
 
             song_path = os.path.join(root, filename)
             print(f"Processing: {song_path}")
@@ -82,16 +80,14 @@ def process_songs(input_dir, output_dir):
                 dest_path = os.path.join(dest_folder, new_filename)
 
                 if os.path.exists(dest_path):
-                    os.remove(dest_path) 
+                    os.remove(dest_path)
                 shutil.move(song_path, dest_path)
                 print(f"Moved to: {dest_path}")
 
-                # Remove empty directories after moving the file, up to input_dir
                 remove_empty_dirs(root, input_dir)
 
             except Exception as e:
                 errors.append(f"ERROR processing {song_path}: {str(e)}")
-                # Mover archivo corrupto a output/Corrupt Files
                 corrupt_dir = os.path.join(output_dir, "Corrupt Files")
                 os.makedirs(corrupt_dir, exist_ok=True)
                 dest_path = os.path.join(corrupt_dir, os.path.basename(song_path))
@@ -114,40 +110,55 @@ class WatcherHandler(FileSystemEventHandler):
     def __init__(self, input_dir, output_dir):
         self.input_dir = input_dir
         self.output_dir = output_dir
+        self.last_run = 0
+        self.interval = 120  # segundos
 
     def on_any_event(self, event):
-        print("\nChange detected, processing...")
-        process_songs(self.input_dir, self.output_dir)
+        now = time.time()
+        if now - self.last_run >= self.interval:
+            print("\nChange detected, processing...")
+            process_songs(self.input_dir, self.output_dir)
+            self.last_run = now
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <input_dir> <output_dir>")
+    args = sys.argv[1:]
+    if len(args) not in (2, 4):
+        print(f"Usage: {sys.argv[0]} <input1> <output1> [<input2> <output2>]")
         sys.exit(1)
 
-    input_dir = sys.argv[1]
-    output_dir = sys.argv[2]
+    pairs = []
+    for i in range(0, len(args), 2):
+        input_dir = args[i]
+        output_dir = args[i+1]
 
-    if not os.path.isdir(input_dir):
-        print(f"Invalid input directory: {input_dir}")
-        sys.exit(1)
+        if not os.path.isdir(input_dir):
+            print(f"Invalid input directory: {input_dir}")
+            sys.exit(1)
 
-    if not os.path.isdir(output_dir):
-        print(f"Invalid output directory: {output_dir}")
-        sys.exit(1)
+        if not os.path.isdir(output_dir):
+            print(f"Invalid output directory: {output_dir}")
+            sys.exit(1)
 
-    event_handler = WatcherHandler(input_dir, output_dir)
-    observer = Observer()
-    observer.schedule(event_handler, path=input_dir, recursive=True)
+        pairs.append((input_dir, output_dir))
 
-    # Procesa los ficheros existentes antes de empezar el watcher
-    process_songs(input_dir, output_dir)
+    observers = []
+    for input_dir, output_dir in pairs:
+        # Procesa los ficheros existentes antes de empezar el watcher
+        process_songs(input_dir, output_dir)
 
-    observer.start()
-    print(f"Monitoring folder: {input_dir} ...")
+        event_handler = WatcherHandler(input_dir, output_dir)
+        observer = Observer()
+        observer.schedule(event_handler, path=input_dir, recursive=True)
+        observer.start()
+        observers.append(observer)
+        print(f"Monitoring folder: {input_dir} ...")
+
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+        for observer in observers:
+            observer.stop()
+        for observer in observers:
+            observer.join()
 
