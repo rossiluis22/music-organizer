@@ -22,38 +22,26 @@ def process_songs(input_dir, output_dir):
         while True:
             if path == stop_at:
                 break
-
-            rel_path = os.path.relpath(path, stop_at)
-            if os.path.sep not in rel_path:
-                break
-
             try:
                 os.rmdir(path)
-                print(f"Removed empty folder: {path}")
                 path = os.path.dirname(path)
             except OSError:
                 break
 
     for root, _, files in os.walk(input_dir):
         for filename in files:
-            file_path = os.path.join(root, filename)
-
-            # Ignorar archivos modificados hace menos de 2 minutos
-            if time.time() - os.path.getmtime(file_path) < 120:
-                continue
-
             ext = filename.lower().split('.')[-1]
             if ext not in VALID_EXTENSIONS:
                 invalid_folder = os.path.join(output_dir, "Invalid Files")
                 os.makedirs(invalid_folder, exist_ok=True)
                 try:
-                    shutil.move(file_path, os.path.join(invalid_folder, filename))
+                    shutil.move(os.path.join(root, filename), os.path.join(invalid_folder, filename))
                     print(f"Moved invalid file to: {os.path.join(invalid_folder, filename)}")
                 except Exception as e:
                     errors.append(f"ERROR moving invalid file {filename}: {str(e)}")
                 continue
 
-            song_path = file_path
+            song_path = os.path.join(root, filename)
             print(f"Processing: {song_path}")
 
             try:
@@ -122,15 +110,11 @@ class WatcherHandler(FileSystemEventHandler):
     def __init__(self, input_dir, output_dir):
         self.input_dir = input_dir
         self.output_dir = output_dir
-        self.last_run = 0
+        self.last_event_time = None
         self.interval = 120  # segundos
 
     def on_any_event(self, event):
-        now = time.time()
-        if now - self.last_run >= self.interval:
-            print("\nChange detected, processing...")
-            process_songs(self.input_dir, self.output_dir)
-            self.last_run = now
+        self.last_event_time = time.time()
 
 if __name__ == "__main__":
     args = sys.argv[1:]
@@ -154,11 +138,9 @@ if __name__ == "__main__":
         pairs.append((input_dir, output_dir))
 
     observers = []
-
-    print(f"⏳ Waiting 2 minutes cooldown before first process...")
-    time.sleep(120)
-
+    handlers = []
     for input_dir, output_dir in pairs:
+        # Procesa los ficheros existentes antes de empezar el watcher
         process_songs(input_dir, output_dir)
 
         event_handler = WatcherHandler(input_dir, output_dir)
@@ -166,13 +148,21 @@ if __name__ == "__main__":
         observer.schedule(event_handler, path=input_dir, recursive=True)
         observer.start()
         observers.append(observer)
+        handlers.append(event_handler)
         print(f"Monitoring folder: {input_dir} ...")
 
     try:
         while True:
+            now = time.time()
+            for handler in handlers:
+                if handler.last_event_time and (now - handler.last_event_time >= handler.interval):
+                    print("\nChange detected and 2 minutes elapsed, processing...")
+                    process_songs(handler.input_dir, handler.output_dir)
+                    handler.last_event_time = None
             time.sleep(1)
     except KeyboardInterrupt:
         for observer in observers:
             observer.stop()
         for observer in observers:
             observer.join()
+
