@@ -3,9 +3,16 @@ import os
 import sys
 import shutil
 from mutagen import File as MutagenFile
+from mutagen.id3 import USLT
+import lyricsgenius
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import time
+
+# --- CONFIGURATION ---
+# Obtain a Genius API token by following the instructions at https://genius.com/api-clients
+# and paste it here.
+GENIUS_API_TOKEN = os.environ.get("GENIUS_API_TOKEN", "YOUR_API_TOKEN_HERE")
 
 ILLEGAL_CHARS = ['/', '?', '\\', ':', '*', '"', '<', '>', '|']
 VALID_EXTENSIONS = ["mp3", "m4a", "wma"]
@@ -15,8 +22,50 @@ def sanitize(text):
         text = text.replace(char, '')
     return text.strip()
 
+def add_lyrics(song_path, title, artist, genius_instance):
+    """
+    Searches for lyrics and adds them to the song's metadata.
+    """
+    try:
+        # Check if lyrics already exist
+        audio = MutagenFile(song_path, easy=True)
+        if 'lyrics' in audio or 'USLT::eng' in audio:
+            print(f"Lyrics already exist for: {title}")
+            return
+
+        print(f"Searching lyrics for '{title}' by '{artist}'...")
+        song = genius_instance.search_song(title, artist)
+        if song:
+            lyrics = song.lyrics.strip()
+
+            # Remove the first line (e.g., "[Song Name] Lyrics")
+            if "Lyrics" in lyrics.split('\n')[0]:
+                lyrics = '\n'.join(lyrics.split('\n')[1:]).strip()
+
+            # Add lyrics to the file
+            audio = MutagenFile(song_path)
+            if song_path.lower().endswith('.mp3'):
+                audio["USLT::eng"] = USLT(encoding=3, lang='eng', desc='desc', text=lyrics)
+            elif song_path.lower().endswith('.m4a'):
+                audio['\xa9lyr'] = lyrics
+
+            audio.save()
+            print(f"✅ Lyrics added for: {title}")
+        else:
+            print(f"❌ Lyrics not found for: {title}")
+
+    except Exception as e:
+        print(f"Error adding lyrics to {song_path}: {str(e)}")
+
 def process_songs(input_dir, output_dir):
     errors = []
+
+    if GENIUS_API_TOKEN == "YOUR_API_TOKEN_HERE":
+        print("WARNING: Genius API token is not set. Lyrics will not be downloaded.")
+        genius = None
+    else:
+        genius = lyricsgenius.Genius(GENIUS_API_TOKEN, verbose=False, remove_section_headers=True, timeout=15)
+
 
     def remove_empty_dirs(path, stop_at):
         protected_folders = {"albums", "playlists", "songs", "youtube-dl", "zips"}
@@ -65,6 +114,10 @@ def process_songs(input_dir, output_dir):
                 title = sanitize(title).title()
                 artist = sanitize(artist).title()
                 album = sanitize(album).title()
+
+                # Add lyrics if a genius instance is available
+                if genius:
+                    add_lyrics(song_path, title, artist, genius)
 
                 track_number = ""
                 if track:

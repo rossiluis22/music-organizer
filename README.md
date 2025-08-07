@@ -4,10 +4,14 @@
 
 **music-organizer** is a Python utility that automatically organizes music files by reading their metadata and moving them into folders by artist and album. It watches a specified input directory for changes and processes files as they are added or modified.
 
-- Supported formats: MP3, M4A, WMA
-- Invalid or corrupted files are moved to dedicated "Invalid Files" or "Corrupt Files" folders.
-- Filenames are sanitized and optionally prefixed with track numbers.
-- Automatically removes empty directories after organizing.
+### Key Features
+
+- **Automatic Organization**: Sorts music into an `Artist/Album` folder structure.
+- **Lyrics Fetching**: Automatically searches for and embeds lyrics into your music files (MP3, M4A) using the Genius API.
+- **File Sanitization**: Cleans up filenames and removes illegal characters.
+- **Directory Monitoring**: Watches a folder for new files and processes them on the fly.
+- **Broad Format Support**: Works with MP3, M4A, and WMA files.
+- **Error Handling**: Moves invalid or corrupt files to separate folders for review.
 
 ## Usage
 
@@ -17,7 +21,26 @@
 - The following Python packages (see `requirements.txt`):
   - `mutagen`
   - `watchdog`
+  - `lyricsgenius`
 - (Optional) Docker
+
+### Lyrics Fetching (Optional)
+
+To enable the automatic download of lyrics, you need a free API token from Genius.com.
+
+1. **Get an API Token**:
+   - Go to [https://genius.com/api-clients](https://genius.com/api-clients) and create a new API client.
+   - Generate a "Client Access Token" for your client.
+
+2. **Set the Token**:
+   You can set the token in one of two ways:
+   - **Environment Variable (Recommended)**: Set an environment variable named `GENIUS_API_TOKEN`.
+     ```sh
+     export GENIUS_API_TOKEN="YOUR_TOKEN_HERE"
+     ```
+   - **Directly in the Script**: Open `script.py` and replace `"YOUR_API_TOKEN_HERE"` with your actual token.
+
+If no token is provided, the script will skip the lyrics functionality.
 
 ### Installation
 
@@ -63,9 +86,10 @@ Replace `/path/to/input` and `/path/to/output` with your actual directories.
 - When a new file appears in the input directory (or a change is detected), the program:
   1. Checks if the file is a supported music format.
   2. Reads the metadata (title, artist, album, track number).
-  3. Sanitizes the data to avoid illegal filename characters.
-  4. Moves the file into the structure: `/output/Artist/Album/Track Title.ext`
-  5. Files with missing or unreadable metadata are either skipped or moved to a "Corrupt Files" folder.
+  3. **(Optional)** If a Genius API token is configured, it searches for and embeds lyrics into the file.
+  4. Sanitizes the metadata to avoid illegal filename characters.
+  5. Moves the file into the structure: `/output/Artist/Album/Track Title.ext`.
+  6. Files with missing or unreadable metadata are either skipped or moved to a "Corrupt Files" folder.
   6. Unsupported formats go to "Invalid Files".
   7. Automatically removes any empty folders left in the input directory after files are moved.
 
